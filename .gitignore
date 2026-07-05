@@ -1,0 +1,6 @@
+.venv/
+.env
+ai_service/.env
+__pycache__/
+*.pyc
+.DS_Store
