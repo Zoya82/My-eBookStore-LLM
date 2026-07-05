@@ -1,6 +1,6 @@
 """接口请求/响应模型 —— 前后端的接口契约。
 
-前端（袁艺轩）按这里的字段对接；后端（李君怡）集成时可直接复用。
+前端按这里的字段对接；后端集成时可直接复用。
 所有响应都带 success 字段：大模型失败时 success=false + message，前端据此降级提示。
 """
 from typing import List, Optional
@@ -38,17 +38,15 @@ class RecommendResponse(BaseModel):
 
 
 # ---------- 多轮问答 ----------
-class ChatMessage(BaseModel):
-    role: str = Field(..., description="user 或 assistant")
-    content: str
-
-
 class ChatRequest(BaseModel):
     message: str = Field(..., description="用户本轮消息")
-    history: List[ChatMessage] = Field(default_factory=list, description="历史对话，前端负责维护")
+    session_id: Optional[str] = Field(
+        None, description="会话 ID；首次对话不传（后端会新建并在响应里返回），之后每轮带上同一个"
+    )
 
 
 class ChatResponse(BaseModel):
     success: bool
     reply: str = ""
+    session_id: str = ""     # 会话 ID，前端保存后每轮带上以维持上下文
     message: str = ""

@@ -1,13 +1,13 @@
 """FastAPI 路由：智能服务对外的三个接口。
 
-===== 后端集成（李君怡）=====
+===== 后端集成 =====
 在主后端程序中：
     from ai_service.router import router as ai_router
     app.include_router(ai_router)
 即挂载：
     POST /api/ai/summary    图书摘要
     POST /api/ai/recommend  智能推荐
-    POST /api/ai/chat       多轮问答
+    POST /api/ai/chat       多轮问答（按 session_id 维护上下文）
 
 所有接口失败时返回 success=false + message，不会抛 500，前端可安全降级。
 """
@@ -54,8 +54,8 @@ def recommend(req: RecommendRequest):
 @router.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     try:
-        history = [m.model_dump() for m in req.history]
-        return ChatResponse(success=True, reply=chat_svc.run(req.message, history))
+        reply, session_id = chat_svc.run(req.message, req.session_id)
+        return ChatResponse(success=True, reply=reply, session_id=session_id)
     except LLMError as e:
         logger.error("问答失败: %s", e)
-        return ChatResponse(success=False, message=_FALLBACK)
+        return ChatResponse(success=False, session_id=req.session_id or "", message=_FALLBACK)

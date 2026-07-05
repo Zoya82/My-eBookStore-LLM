@@ -12,6 +12,7 @@ ai_service/
 ├── prompts.py         # 提示词模板（集中调优）
 ├── schemas.py         # 请求/响应模型（前后端接口契约）
 ├── book_repo.py       # 图书数据访问层（现读JSON，后期换DB的插槽）
+├── session_store.py   # 多轮问答的会话上下文（内存 TTLCache，自动过期）
 ├── services/          # 三个功能的业务逻辑
 │   ├── summary.py     #   智能摘要
 │   ├── recommend.py   #   智能推荐
@@ -54,7 +55,7 @@ uvicorn ai_service.main:app --reload --port 8001
 |---|---|---|
 | `/api/ai/summary` | `{text, max_length}` | `{success, summary}` |
 | `/api/ai/recommend` | `{query}` | `{success, items:[{id,title,reason}], reply}` |
-| `/api/ai/chat` | `{message, history:[{role,content}]}` | `{success, reply}` |
+| `/api/ai/chat` | `{message, session_id?}` | `{success, reply, session_id}` |
 
 示例（推荐）：
 ```json
