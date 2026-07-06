@@ -1,4 +1,4 @@
-"""独立运行入口 —— 方便柴子萱单独开发调试，不依赖后端主程序。
+"""独立运行入口 —— 方便本模块单独开发调试，不依赖后端主程序。
 
 从 code/My_eBookStore/ 目录运行：
     uvicorn ai_service.main:app --reload --port 8001
