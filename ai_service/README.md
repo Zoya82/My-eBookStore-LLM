@@ -84,6 +84,11 @@ def get_all_books():
 - **后端**：挂载路由 + 用真实图书数据替换 `book_repo`
 - **前端**：按上表接口调用；多轮问答带上 `session_id`
 
+## 常用位置
+
+- 提示词：`prompts.py`　·　样例图书：`data/sample_books.json`　·　接口字段：`schemas.py`
+- 换 API Key：编辑 `ai_service/.env`
+
 ## TODO
 - [ ] 拿到百炼 Key，跑通 `test_llm`
 - [ ] 调优三个功能的提示词
