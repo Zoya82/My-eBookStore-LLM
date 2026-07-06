@@ -46,51 +46,12 @@ uvicorn ai_service.main:app --reload --port 8001
 # 打开 http://localhost:8001/docs 直接点开测试三个接口
 ```
 
-## 接口（给前端对接）
+## 对接
 
-统一前缀 `/api/ai`，均为 `POST`，请求/响应见 `schemas.py`。
-响应都带 `success` 字段，失败时 `success=false` + `message`，前端据此降级提示。
-
-| 接口 | 请求体 | 关键返回 |
-|---|---|---|
-| `/api/ai/summary` | `{text, max_length}` | `{success, summary}` |
-| `/api/ai/recommend` | `{query}` | `{success, items:[{id,title,reason}], reply}` |
-| `/api/ai/chat` | `{message, session_id?}` | `{success, reply, session_id}` |
-
-示例（推荐）：
-```json
-// 请求
-{"query": "想找一本适合周末放松看的科幻小说"}
-// 响应
-{"success": true, "items": [{"id": 1, "title": "三体", "reason": "宏大科幻，适合沉浸阅读"}], "reply": "..."}
-```
-
-## 集成说明（给后端）
-
-**挂载路由**——在后端主程序里两行搞定：
-```python
-from ai_service.router import router as ai_router
-app.include_router(ai_router)
-```
-
-**接入真实图书数据**——只改 `book_repo.py` 一个文件，把 `get_all_books()` 换成查数据库，返回同样结构（`id/title/author/category/intro`）即可，`services/` 无需改动：
-```python
-def get_all_books():
-    return [book_to_dict(b) for b in db.query(Book).all()]
-```
-
-## 分工衔接
-- **本模块（AI 服务）**：摘要/推荐/问答/提示词/封装/兜底
-- **后端**：挂载路由 + 用真实图书数据替换 `book_repo`
-- **前端**：按上表接口调用；多轮问答带上 `session_id`
+- 前端看 [对接说明-前端.md](对接说明-前端.md)
+- 后端看 [对接说明-后端.md](对接说明-后端.md)
 
 ## 常用位置
 
 - 提示词：`prompts.py`　·　样例图书：`data/sample_books.json`　·　接口字段：`schemas.py`
 - 换 API Key：编辑 `ai_service/.env`
-
-## TODO
-- [ ] 拿到百炼 Key，跑通 `test_llm`
-- [ ] 调优三个功能的提示词
-- [ ] 推荐功能接入真实图书库（等后端）
-- [ ] 前端页面对接联调
