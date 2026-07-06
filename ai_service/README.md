@@ -46,11 +46,6 @@ uvicorn ai_service.main:app --reload --port 8001
 # 打开 http://localhost:8001/docs 直接点开测试三个接口
 ```
 
-## 对接
-
-- 前端看 [对接说明-前端.md](对接说明-前端.md)
-- 后端看 [对接说明-后端.md](对接说明-后端.md)
-
 ## 常用位置
 
 - 提示词：`prompts.py`　·　样例图书：`data/sample_books.json`　·　接口字段：`schemas.py`
