@@ -11,7 +11,7 @@ from .router import router
 
 app = FastAPI(title="智能掌上书店 · 智能服务", version="0.1.0")
 
-# 允许前端（uni-app H5）跨域调试；正式集成时由后端主程序统一配置
+# 允许前端（Web / H5）跨域调试；正式集成时由后端主程序统一配置
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
