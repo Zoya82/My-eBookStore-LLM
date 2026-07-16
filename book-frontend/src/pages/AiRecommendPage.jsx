@@ -179,7 +179,7 @@ function AiRecommendPage() {
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="向 AI 提问或输入推荐需求..."
+              placeholder="向 AI 提问..."
               disabled={chatLoading}
             />
             <button type="submit" disabled={chatLoading || !chatInput.trim()}>

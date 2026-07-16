@@ -66,11 +66,10 @@ export async function chatWithAi(message, sessionId = '') {
 }
 
 /**
- * 智能摘要
- * @param {string} text - 要摘要的文本
- * @param {number} maxLength - 最大长度
- * @returns {Promise} { summary: '...' }
+ * 智能摘要（基于全书内容的约 200 字安利体推荐语；无全文时服务端自动降级为简介摘要）
+ * @param {number} bookId - 图书 ID
+ * @returns {Promise} { summary: '...', source: 'rag'|'full'|'cached'|'intro' }
  */
-export async function summarizeBook(text, maxLength = 60) {
-  return fetchAi('/api/ai/summary', { text, max_length: maxLength })
+export async function summarizeBook(bookId) {
+  return fetchAi('/api/ai/summary', { book_id: bookId })
 }

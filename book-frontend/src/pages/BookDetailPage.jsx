@@ -141,11 +141,11 @@ function BookDetailPage({ book, onBack, onAddToCart, onRequireLogin, onPreview }
   }
 
   const generateSummary = async () => {
-    if (!detail.description || summaryBusy) return
+    if (!detail.id || summaryBusy || !(detail.hasPreview || detail.description)) return
     setSummaryBusy(true)
     setSummaryError('')
     try {
-      const result = await summarizeBook(detail.description, 60)
+      const result = await summarizeBook(detail.id)
       setSummary(result.summary || '')
     } catch (requestError) {
       setSummaryError(requestError.message)
@@ -246,9 +246,9 @@ function BookDetailPage({ book, onBack, onAddToCart, onRequireLogin, onPreview }
 
       <section className="tab-section ai-summary-section">
         <h3>AI 简介</h3>
-        <p className="hint-text">根据图书简介生成精简摘要</p>
-        <button className="secondary-btn" disabled={summaryBusy || !detail.description} onClick={generateSummary}>{summaryBusy ? '正在生成…' : '生成 AI 摘要'}</button>
-        {!detail.description && <p className="hint-text">暂无简介，无法生成 AI 摘要</p>}
+        <p className="hint-text">基于全书内容生成 AI 推荐语</p>
+        <button className="secondary-btn" disabled={summaryBusy || !(detail.hasPreview || detail.description)} onClick={generateSummary}>{summaryBusy ? '正在生成…' : '生成 AI 摘要'}</button>
+        {!(detail.hasPreview || detail.description) && <p className="hint-text">该书暂无可供摘要的内容</p>}
         {summaryError && <div className="error-msg">{summaryError}</div>}
         {summary && <div className="summary-content">{summary}</div>}
       </section>
