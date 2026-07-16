@@ -1,0 +1,10 @@
+import { useEffect, useState } from 'react'
+import { getBookContent, getBookPreview } from '../api/books'
+import { useAuth } from '../auth/AuthContext'
+function ReaderPage({ bookId, mode, fallbackBook={}, onBack, onRequireLogin }) { const {isAuthenticated,authLoading,user}=useAuth(); const [data,setData]=useState(null); const [error,setError]=useState(''); const [size,setSize]=useState('standard')
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(()=>{if(authLoading||!isAuthenticated){setData(null);return}let active=true;(mode==='preview'?getBookPreview(bookId):getBookContent(bookId)).then(x=>{if(active){if(!x.content)throw new Error('阅读内容为空');setData(x)}}).catch(e=>{if(active){setData(null);setError(e.status===403?'尚未购买该书电子版，无法阅读全文':e.message)}});return()=>{active=false}},[bookId,mode,isAuthenticated,authLoading,user?.id,onRequireLogin])
+  if(authLoading)return <div className="page-card">正在恢复登录状态</div>;if(!isAuthenticated)return <div className="page-card">请先登录后阅读<button className="primary-btn" onClick={onRequireLogin}>去登录</button></div>;if(error)return <div className="reader-page page-card"><p>{error}</p><button className="secondary-btn" onClick={()=>setError('')}>重试</button><button className="back-btn" onClick={onBack}>返回</button></div>;if(!data)return <div className="page-card">正在加载正文…</div>
+  return <div className="reader-page"><div className="reader-toolbar"><button className="back-btn" onClick={onBack}>返回</button><span>{mode==='preview'?'试读内容':'已购全文'}</span><div><button onClick={()=>setSize('small')}>小</button><button onClick={()=>setSize('standard')}>标准</button><button onClick={()=>setSize('large')}>大</button></div></div><h2>{data.title||fallbackBook.title}</h2><p>{data.author||fallbackBook.author}</p><p>{mode==='preview'?`${data.previewLength}/${data.totalLength}`:`共 ${data.totalLength} 字`}</p><article className={`reader-content ${size}`}>{data.content}</article>{mode==='preview'&&<div className="reader-end">试读结束，购买电子版并完成模拟支付后可阅读全文。</div>}</div>
+}
+export default ReaderPage

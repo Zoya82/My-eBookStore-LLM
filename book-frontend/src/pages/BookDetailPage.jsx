@@ -1,167 +1,299 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { getBookDetail } from '../api/books'
 import { summarizeBook } from '../api/ai'
+import {
+  createBookReview,
+  getBookReviews,
+  getFavorites,
+  recordBrowsingHistory,
+  toggleFavorite,
+} from '../api/interactions'
+import { useAuth } from '../auth/AuthContext'
 
-function BookDetailPage({ book, onBack, onAddToCart }) {
-  const [summaryLoading, setSummaryLoading] = useState(false)
-  const [summaryError, setSummaryError] = useState('')
+function BookDetailPage({ book, onBack, onAddToCart, onRequireLogin, onPreview }) {
+  const { user, isAuthenticated, authLoading } = useAuth()
+  const [detail, setDetail] = useState(null)
+  const [loading, setLoading] = useState(Boolean(book?.id))
+  const [error, setError] = useState('')
+  const [selectedVersion, setSelectedVersion] = useState(null)
+  const [notice, setNotice] = useState('')
+  const [cartBusy, setCartBusy] = useState(false)
+  const [coverFailed, setCoverFailed] = useState(false)
+
   const [summary, setSummary] = useState('')
-  const [activeTab, setActiveTab] = useState('简介')
-  const [collected, setCollected] = useState(false)
-  const [buyNotice, setBuyNotice] = useState('')
+  const [summaryBusy, setSummaryBusy] = useState(false)
+  const [summaryError, setSummaryError] = useState('')
 
-  if (!book) {
-    return null
-  }
+  const [reviews, setReviews] = useState([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsError, setReviewsError] = useState('')
+  const [favorite, setFavorite] = useState(false)
+  const [favoriteLoading, setFavoriteLoading] = useState(false)
+  const [favoriteBusy, setFavoriteBusy] = useState(false)
+  const [rating, setRating] = useState(5)
+  const [comment, setComment] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewFeedback, setReviewFeedback] = useState(null)
+  const historyBookRef = useRef(null)
 
-  const descText =
-    book.description ||
-    '这本书由作者用细腻的笔触讲述生活中的温度与思考，适合在闲暇时阅读，带来轻松又有收获的阅读体验。'
+  useEffect(() => {
+    if (!book?.id) return undefined
+    let active = true
+    getBookDetail(book.id)
+      .then(data => { if (active) setDetail(data) })
+      .catch(requestError => { if (active) setError(requestError.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [book?.id])
 
-  const bookPublisher = book.publisher || '晓光出版社'
-  const originalPrice = book.originalPrice || '¥88.00'
-  const stock = book.stock || '有货'
+  useEffect(() => {
+    if (!detail?.id || authLoading) return undefined
+    let active = true
+    const timer = setTimeout(() => {
+      if (!isAuthenticated) {
+        setFavorite(false)
+        setReviews([])
+        setReviewsError('')
+        return
+      }
 
-  const handleGetSummary = async () => {
-    setSummaryError('')
-    setSummary('')
-    setSummaryLoading(true)
+      setFavoriteLoading(true)
+      setReviewsLoading(true)
+      getFavorites(detail.id)
+        .then(items => { if (active) setFavorite(items.length > 0) })
+        .catch(requestError => { if (active) setNotice(requestError.message) })
+        .finally(() => { if (active) setFavoriteLoading(false) })
+      getBookReviews(detail.id)
+        .then(items => { if (active) setReviews(items) })
+        .catch(requestError => { if (active) setReviewsError(requestError.message) })
+        .finally(() => { if (active) setReviewsLoading(false) })
 
+      if (historyBookRef.current !== detail.id) {
+        historyBookRef.current = detail.id
+        recordBrowsingHistory(detail.id).catch(requestError => {
+          if (active && requestError.status !== 401) setNotice('浏览记录保存失败')
+        })
+      }
+    }, 0)
+    return () => { active = false; clearTimeout(timer) }
+  }, [detail?.id, isAuthenticated, authLoading, user?.id])
+
+  if (loading) return <div className="page-card">正在加载图书详情…</div>
+  if (error || !detail) return <div className="page-card error-msg">{error || '无法加载图书详情'}<button className="back-btn" onClick={onBack}>返回</button></div>
+
+  const saleVersions = detail.versions?.filter(version => version.is_on_sale !== false) || []
+  const currentVersion = selectedVersion && saleVersions.find(version => version.id === selectedVersion.id)
+    ? selectedVersion
+    : saleVersions.find(version => version.version_type === 'physical') || saleVersions[0] || null
+  const canBuy = Boolean(currentVersion) && (currentVersion.version_type === 'digital' || Number(currentVersion.stock) > 0)
+  const myReview = reviews.find(review => review.isMine)
+
+  const addSelectedVersion = async openCart => {
+    if (!canBuy || cartBusy) return
+    setCartBusy(true)
+    setNotice('')
     try {
-      const data = await summarizeBook(descText, 60)
-      setSummary(data.summary)
-    } catch (err) {
-      setSummaryError(err.message)
+      const result = await onAddToCart(detail, currentVersion, openCart)
+      setNotice(result?.message || (openCart ? '已加入购物车' : '加入购物车成功'))
+      if (result?.requiresLogin) onRequireLogin?.()
+    } catch (requestError) {
+      setNotice(requestError.message)
     } finally {
-      setSummaryLoading(false)
+      setCartBusy(false)
     }
   }
 
-  const handleBuyNow = () => {
-    onAddToCart(book)
-    setBuyNotice('已添加购物车，可在购物车页继续结算')
+  const openPreview = () => {
+    if (!detail.hasPreview) {
+      setNotice('暂无试读内容')
+      return
+    }
+    if (authLoading) {
+      setNotice('正在恢复登录状态，请稍候')
+      return
+    }
+    if (!isAuthenticated) {
+      setNotice('请先登录后试读')
+      onRequireLogin?.()
+      return
+    }
+    onPreview?.(detail)
   }
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case '目录':
-        return (
-          <div className="tab-section">
-            <ol>
-              <li>第一章 破晓</li>
-              <li>第二章 阅读之旅</li>
-              <li>第三章 心灵篇章</li>
-              <li>第四章 深入思考</li>
-              <li>第五章 温暖结语</li>
-            </ol>
-          </div>
-        )
-      case '评价':
-        return (
-          <div className="tab-section">
-            <p>“语言优美，令人沉浸。每一章都像一次心灵漫步。”</p>
-            <p>“书中故事温暖且富有哲理，适合静心阅读。”</p>
-          </div>
-        )
-      case '详情参数':
-        return (
-          <div className="tab-section detail-params">
-            <div>页数：320 页</div>
-            <div>语言：中文</div>
-            <div>装帧：平装</div>
-            <div>ISBN：978-7-12345-678-9</div>
-          </div>
-        )
-      case '简介':
-      default:
-        return (
-          <>
-            <div className="tab-section">
-              <h4>图书简介</h4>
-              <p>{descText}</p>
-            </div>
-            <div className="tab-section">
-              <h4>AI 摘要</h4>
-              <button
-                className="secondary-btn"
-                onClick={handleGetSummary}
-                disabled={summaryLoading}
-              >
-                {summaryLoading ? '正在生成...' : '生成 AI 摘要'}
-              </button>
-              {summaryError && <div className="error-msg">{summaryError}</div>}
-              {summary ? (
-                <div className="summary-content">{summary}</div>
-              ) : (
-                <p className="hint-text">点击 AI 摘要，快速得到书籍亮点与阅读推荐。</p>
-              )}
-            </div>
-          </>
-        )
+  const handleFavorite = async () => {
+    if (authLoading || favoriteBusy) return
+    if (!isAuthenticated) {
+      setNotice('请先登录后收藏')
+      onRequireLogin?.()
+      return
+    }
+    setFavoriteBusy(true)
+    setNotice('')
+    try {
+      const result = await toggleFavorite(detail.id)
+      setFavorite(result.isFavorite)
+      setNotice(result.isFavorite ? '已收藏' : '已取消收藏')
+    } catch (requestError) {
+      setNotice(requestError.message)
+    } finally {
+      setFavoriteBusy(false)
+    }
+  }
+
+  const generateSummary = async () => {
+    if (!detail.description || summaryBusy) return
+    setSummaryBusy(true)
+    setSummaryError('')
+    try {
+      const result = await summarizeBook(detail.description, 60)
+      setSummary(result.summary || '')
+    } catch (requestError) {
+      setSummaryError(requestError.message)
+    } finally {
+      setSummaryBusy(false)
+    }
+  }
+
+  const reloadReviews = async () => {
+    setReviewsLoading(true)
+    setReviewsError('')
+    try {
+      setReviews(await getBookReviews(detail.id))
+    } catch (requestError) {
+      setReviewsError(requestError.message)
+    } finally {
+      setReviewsLoading(false)
+    }
+  }
+
+  const submitReview = async event => {
+    event.preventDefault()
+    if (!isAuthenticated) {
+      setReviewFeedback({ type: 'error', message: '请先登录后再发表评价' })
+      onRequireLogin?.()
+      return
+    }
+    if (rating < 1 || rating > 5 || comment.trim().length > 1000) {
+      setReviewFeedback({ type: 'error', message: '评分或评论内容不合法' })
+      return
+    }
+    setReviewBusy(true)
+    setReviewFeedback(null)
+    try {
+      await createBookReview({ bookId: detail.id, rating, comment })
+      setComment('')
+      setRating(5)
+      await reloadReviews()
+      setReviewFeedback({ type: 'success', message: '评价提交成功' })
+    } catch (requestError) {
+      setReviewFeedback({
+        type: 'error',
+        message: requestError.message || '评价提交失败，请稍后重试',
+      })
+    } finally {
+      setReviewBusy(false)
     }
   }
 
   return (
     <div className="detail-page">
-      <button className="back-btn" onClick={onBack}>
-        ← 返回
-      </button>
-
+      <button className="back-btn" onClick={onBack}>返回</button>
       <div className="detail-card detail-grid">
-        <div className="detail-cover detail-cover-large" style={{ background: book.color }}>
-          <span>{book.title[0]}</span>
+        <div className="detail-cover detail-cover-large" style={{ background: detail.color }}>
+          {detail.coverImage && !coverFailed
+            ? <img src={detail.coverImage} alt={`${detail.title}封面`} onError={() => setCoverFailed(true)} />
+            : <span>{detail.title?.slice(0, 1) || '书'}</span>}
         </div>
+        <div className="detail-main">
+          <h2>{detail.title}</h2>
+          <p className="detail-author">作者：{detail.author || '暂无'}</p>
+          <p className="detail-publisher">出版社：{detail.publisher || '暂无'}</p>
 
-        <div className="detail-info detail-main">
-          <h2>{book.title}</h2>
-          <p className="detail-author">作者：{book.author}</p>
-          <p className="detail-publisher">出版社：{bookPublisher}</p>
-
-          <div className="detail-meta-row">
-            <span className="meta-item">定价：<del>{originalPrice}</del></span>
-            <span className="meta-item sale">售价：{book.price}</span>
-            <span className={`stock-tag stock-${stock === '有货' ? 'in' : stock === '库存紧张' ? 'low' : 'out'}`}>
-              {stock}
-            </span>
+          <div className="version-picker">
+            <h4>选择版本</h4>
+            {saleVersions.length ? saleVersions.map(version => {
+              const disabled = version.version_type === 'physical' && Number(version.stock) <= 0
+              return (
+                <button
+                  type="button"
+                  key={version.id}
+                  disabled={disabled}
+                  onClick={() => setSelectedVersion(version)}
+                  className={`version-option${currentVersion?.id === version.id ? ' selected' : ''}`}
+                >
+                  <span>{version.type_label || version.version_type}</span>
+                  <span>¥{version.sale_price ?? '暂无'}</span>
+                  <span>库存：{version.stock ?? '暂无'}</span>
+                </button>
+              )
+            }) : <p>暂无可购买版本</p>}
           </div>
 
-          <div className="detail-actions detail-actions-grid">
-            <button className="primary-btn" onClick={() => onAddToCart(book)}>
-              加入购物车
-            </button>
-            <button className="secondary-btn" type="button" onClick={handleBuyNow}>
-              立即购买
-            </button>
-            <button
-              className={`icon-btn favorite-btn ${collected ? 'collected' : ''}`}
-              type="button"
-              onClick={() => setCollected((prev) => !prev)}
-            >
-              {collected ? '★ 已收藏' : '☆ 收藏'}
-            </button>
+          <div className="detail-actions-grid">
+            <button className="primary-btn" disabled={!canBuy || cartBusy} onClick={() => addSelectedVersion(false)}>{cartBusy ? '处理中…' : '加入购物车'}</button>
+            <button className="secondary-btn" disabled={!canBuy || cartBusy} onClick={() => addSelectedVersion(true)}>立即购买</button>
+            <button className="secondary-btn" disabled={authLoading || !detail.hasPreview} onClick={openPreview}>{detail.hasPreview ? '试读' : '暂无试读'}</button>
+            <button className={`secondary-btn favorite-btn${favorite ? ' collected' : ''}`} disabled={favoriteLoading || favoriteBusy} onClick={handleFavorite}>{favoriteLoading ? '收藏状态加载中…' : favorite ? '★ 已收藏' : '☆ 收藏'}</button>
           </div>
-
-          {buyNotice && <div className="buy-notice">{buyNotice}</div>}
+          {notice && <div className="buy-notice">{notice}</div>}
         </div>
       </div>
 
-      <div className="detail-tabs">
-        <div className="tab-list">
-          {['简介', '目录', '评价', '详情参数'].map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-        <div className="tab-panel">{renderTabContent()}</div>
-      </div>
+      <section className="tab-section">
+        <h3>图书简介</h3>
+        <p>{detail.description || '暂无图书简介'}</p>
+      </section>
+
+      <section className="tab-section ai-summary-section">
+        <h3>AI 简介</h3>
+        <p className="hint-text">根据图书简介生成精简摘要</p>
+        <button className="secondary-btn" disabled={summaryBusy || !detail.description} onClick={generateSummary}>{summaryBusy ? '正在生成…' : '生成 AI 摘要'}</button>
+        {!detail.description && <p className="hint-text">暂无简介，无法生成 AI 摘要</p>}
+        {summaryError && <div className="error-msg">{summaryError}</div>}
+        {summary && <div className="summary-content">{summary}</div>}
+      </section>
+
+      <section className="tab-section review-section">
+        <h3>读者评价</h3>
+        {!isAuthenticated && !authLoading ? (
+          <div className="page-card"><p>登录后查看和发表评价</p><button className="secondary-btn" onClick={onRequireLogin}>去登录</button></div>
+        ) : reviewsLoading ? (
+          <p>正在加载评价…</p>
+        ) : reviewsError ? (
+          <div className="error-msg"><p>{reviewsError}</p><button className="secondary-btn" onClick={reloadReviews}>重试</button></div>
+        ) : reviews.length ? reviews.map(review => (
+          <article className="review-card" key={review.id}>
+            <b>{review.username} {review.isMine && '· 我的评价'}</b>
+            <div>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</div>
+            <p>{review.comment || '该用户未填写文字评论'}</p>
+            <small>{review.createdAt || ''}</small>
+          </article>
+        )) : <p>暂无评价</p>}
+
+        {isAuthenticated && !reviewsLoading && !myReview && (
+          <form className="review-form" onSubmit={submitReview}>
+            <h4>发表评价</h4>
+            <select value={rating} onChange={event => setRating(Number(event.target.value))}>
+              {[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} 星</option>)}
+            </select>
+            <textarea maxLength={1000} value={comment} onChange={event => setComment(event.target.value)} placeholder="分享你的阅读感受" />
+            <small>{comment.length} / 1000</small>
+            <button className="primary-btn" disabled={reviewBusy}>{reviewBusy ? '提交中…' : '提交评价'}</button>
+          </form>
+        )}
+        {reviewFeedback && (
+          <div
+            className={`review-feedback ${reviewFeedback.type}`}
+            role={reviewFeedback.type === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
+          >
+            {reviewFeedback.message}
+          </div>
+        )}
+        {myReview && <p className="hint-text">你已评价过这本书。</p>}
+      </section>
     </div>
   )
 }
 
 export default BookDetailPage
-

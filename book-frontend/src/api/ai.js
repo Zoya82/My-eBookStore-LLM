@@ -35,10 +35,10 @@ async function fetchAi(endpoint, payload, timeout = REQUEST_TIMEOUT) {
     clearTimeout(timeoutId)
 
     if (error.name === 'AbortError') {
-      throw new Error('请求超时，请检查网络或稍后重试')
+      throw new Error('请求超时，请检查网络或稍后重试', { cause: error })
     }
 
-    throw new Error(error.message || '网络连接失败，请检查 AI 服务是否已启动')
+    throw new Error(error.message || '网络连接失败，请检查 AI 服务是否已启动', { cause: error })
   }
 }
 
