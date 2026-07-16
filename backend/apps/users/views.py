@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .models import User, Address
-from .serializers import RegisterSerializer, UserSerializer, LoginSerializer, AddressSerializer
+from .serializers import RegisterSerializer, UserSerializer, LoginSerializer, AddressSerializer, ChangePasswordSerializer
 from django.shortcuts import get_object_or_404
 
 class RegisterView(APIView):
@@ -29,7 +29,10 @@ class LoginView(APIView):
         if not serializer.is_valid():
             return Response({'code': 400, 'msg': serializer.errors}, status=400)
         user = authenticate(request, **serializer.validated_data)
-        if user is None or not user.is_active:
+        if user is None:
+            disabled_user = User.objects.filter(username=serializer.validated_data['username']).first()
+            if disabled_user and not disabled_user.is_active and disabled_user.check_password(serializer.validated_data['password']):
+                return Response({'code': 403, 'msg': '您的账号已被禁用，请联系管理员了解详情'}, status=403)
             return Response({'code': 401, 'msg': '用户名或密码错误'}, status=401)
         payload = {'user_id': user.id, 'username': user.username,
                    'exp': datetime.utcnow() + timedelta(days=7)}
@@ -81,3 +84,12 @@ class ProfileView(APIView):
             return Response({'code': 400, 'msg': serializer.errors}, status=400)
         serializer.save()
         return Response({'code': 200, 'msg': '更新成功', 'data': serializer.data})
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        if not serializer.is_valid(): return Response({'code': 400, 'msg': serializer.errors}, status=400)
+        if not request.user.check_password(serializer.validated_data['old_password']): return Response({'code': 400, 'msg': '原密码错误'}, status=400)
+        request.user.set_password(serializer.validated_data['new_password']); request.user.save()
+        return Response({'code': 200, 'msg': '密码修改成功', 'data': None})

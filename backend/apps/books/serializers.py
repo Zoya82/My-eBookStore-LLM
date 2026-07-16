@@ -10,6 +10,13 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'name', 'parent']
 
+class PublicCategorySerializer(serializers.ModelSerializer):
+    parent_name = serializers.CharField(source='parent.name', read_only=True, allow_null=True)
+    book_count = serializers.IntegerField(read_only=True)
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'parent', 'parent_name', 'book_count']
+
 
 class BookVersionSerializer(serializers.ModelSerializer):
     """版本序列化器"""

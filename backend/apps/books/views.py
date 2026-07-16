@@ -5,14 +5,14 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Case, IntegerField, OuterRef, Subquery, Value, When, Q
+from django.db.models import Case, IntegerField, OuterRef, Subquery, Value, When, Q, Count
 from django.utils import timezone
 from datetime import timedelta
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 
-from .models import Book
-from .serializers import BookListSerializer, BookDetailSerializer
+from .models import Book, Category
+from .serializers import BookListSerializer, BookDetailSerializer, PublicCategorySerializer
 from .utils import BookContentError, get_book_content, get_preview_content, has_readable_content
 
 
@@ -175,6 +175,11 @@ class BookViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = self.get_serializer(book)
         return Response({'code': 200, 'msg': 'success', 'data': serializer.data})
+
+    @action(detail=False, methods=['get'], url_path='categories')
+    def categories(self, request):
+        queryset = Category.objects.select_related('parent').annotate(book_count=Count('books', filter=Q(books__is_on_sale=True), distinct=True)).filter(book_count__gt=0).order_by('sort', 'id')
+        return Response({'code': 200, 'msg': 'success', 'data': PublicCategorySerializer(queryset, many=True).data})
 
     @action(detail=True, methods=['get'], url_path='preview', permission_classes=[IsAuthenticated])
     def preview(self, request, pk=None):

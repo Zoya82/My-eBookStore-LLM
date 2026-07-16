@@ -29,7 +29,10 @@ class UserAuthTests(APITestCase):
         self.register = '/api/users/register/'
         self.login = '/api/users/login/'
         self.profile = '/api/users/profile/'
+        self.change_password = '/api/users/change-password/'
         self.user = User.objects.create_user(username='tester', phone='13800138000', password='secret123')
+        self.disabled_user = User.objects.create_user(username='disabledtester', phone='13800138001', password='disabledpass', is_active=False)
+        self.admin = User.objects.create_user(username='adminuser', phone='13800138002', password='adminpass', is_staff=True)
 
     def token(self, user=None, exp=None):
         user = user or self.user
@@ -46,13 +49,25 @@ class UserAuthTests(APITestCase):
         self.assertEqual(self.client.post(self.register, {'username':'tester','phone':'13900139003','password':'secret123'}, format='json').status_code, 400)
         self.assertEqual(self.client.post(self.register, {'username':'other','phone':'13800138000','password':'secret123'}, format='json').status_code, 400)
 
-    def test_login_and_active(self):
+    def test_login_responses_do_not_leak_disabled_account_or_credentials(self):
         response = self.client.post(self.login, {'username':'tester','password':'secret123'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('token', response.data['data'])
-        self.user.is_active = False; self.user.save()
-        self.assertEqual(self.client.post(self.login, {'username':'tester','password':'secret123'}, format='json').status_code, 401)
+        self.assertIn('user', response.data['data'])
+        self.assertEqual(self.client.post(self.login, {'username':'missing','password':'secret123'}, format='json').status_code, 401)
         self.assertEqual(self.client.post(self.login, {'username':'tester','password':'bad'}, format='json').status_code, 401)
+        disabled = self.client.post(self.login, {'username':'disabledtester','password':'disabledpass'}, format='json')
+        self.assertEqual(disabled.status_code, 403)
+        self.assertEqual(disabled.data['code'], 403)
+        self.assertEqual(disabled.data['msg'], '您的账号已被禁用，请联系管理员了解详情')
+        self.assertNotIn('token', disabled.data.get('data') or {})
+        disabled_wrong = self.client.post(self.login, {'username':'disabledtester','password':'bad'}, format='json')
+        self.assertEqual(disabled_wrong.status_code, 401)
+        self.assertEqual(disabled_wrong.data['msg'], '用户名或密码错误')
+        for response in (self.client.post(self.login, {'username':'missing','password':'secret123'}, format='json'), self.client.post(self.login, {'username':'tester','password':'bad'}, format='json'), disabled, disabled_wrong):
+            self.assertNotIn('password', str(response.data).lower())
+            self.assertNotIn(self.disabled_user.password, str(response.data))
+        self.assertEqual(self.client.post(self.login, {'username':'adminuser','password':'adminpass'}, format='json').status_code, 200)
 
     def test_profile_protection_and_validation(self):
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.token())
@@ -70,6 +85,16 @@ class UserAuthTests(APITestCase):
             self.assertEqual(self.client.get(self.profile).status_code, 401)
         self.client.credentials(HTTP_AUTHORIZATION='bearer ' + self.token(exp=datetime.utcnow()-timedelta(seconds=1)))
         self.assertEqual(self.client.get(self.profile).status_code, 401)
+
+    def test_change_password(self):
+        old, new = 'secret123', 'changed123'
+        self.assertEqual(self.client.post(self.change_password, {'old_password':old,'new_password':new,'confirm_password':new}, format='json').status_code, 401)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.token())
+        wrong = self.client.post(self.change_password, {'old_password':'wrongpass','new_password':new,'confirm_password':new}, format='json'); self.assertEqual(wrong.status_code, 400); self.assertEqual(wrong.data['msg'], '原密码错误'); self.assertTrue(self.user.check_password(old))
+        mismatch = self.client.post(self.change_password, {'old_password':old,'new_password':new,'confirm_password':'different'}, format='json'); self.assertEqual(mismatch.status_code, 400); self.assertIn('confirm_password', str(mismatch.data))
+        self.assertEqual(self.client.post(self.change_password, {'old_password':old,'new_password':'short','confirm_password':'short'}, format='json').status_code, 400)
+        response = self.client.post(self.change_password, {'old_password':old,'new_password':new,'confirm_password':new}, format='json'); self.assertEqual(response.status_code, 200); self.assertEqual(response.data, {'code':200,'msg':'密码修改成功','data':None}); self.user.refresh_from_db(); self.assertFalse(self.user.check_password(old)); self.assertTrue(self.user.check_password(new))
+        for value in (wrong.data, mismatch.data, response.data): self.assertNotIn(old, str(value)); self.assertNotIn(new, str(value))
         self.user.is_active = False; self.user.save()
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.token())
         self.assertEqual(self.client.get(self.profile).status_code, 401)

@@ -11,4 +11,10 @@ urlpatterns = [
     path('users/', views.AdminUserListView.as_view(), name='admin-user-list'),
     path('users/<int:user_id>/', views.AdminUserDetailView.as_view(), name='admin-user-detail'),
     path('users/<int:user_id>/toggle/', views.AdminUserToggleView.as_view(), name='admin-user-toggle'),
+
+    path('categories/', views.AdminCategoryListView.as_view(), name='admin-category-list'),
+    path('books/', views.AdminBookListCreateView.as_view(), name='admin-book-list-create'),
+    path('books/<int:book_id>/', views.AdminBookDetailView.as_view(), name='admin-book-detail'),
+    path('books/<int:book_id>/sale/', views.AdminBookSaleView.as_view(), name='admin-book-sale'),
+    path('dashboard/summary/', views.AdminDashboardSummaryView.as_view(), name='admin-dashboard-summary'),
 ]

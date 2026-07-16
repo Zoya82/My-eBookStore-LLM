@@ -41,6 +41,14 @@ class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True, max_length=150)
     password = serializers.CharField(required=True, max_length=128, write_only=True)
 
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True, write_only=True, max_length=128)
+    new_password = serializers.CharField(required=True, write_only=True, min_length=6, max_length=128)
+    confirm_password = serializers.CharField(required=True, write_only=True, max_length=128)
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']: raise serializers.ValidationError({'confirm_password': ['两次新密码不一致']})
+        return attrs
+
 class AddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Address
