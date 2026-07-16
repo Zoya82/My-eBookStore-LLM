@@ -3,6 +3,7 @@ import uuid
 
 from ..llm_client import chat as llm_chat
 from ..prompts import chat_messages
+from ..book_repo import get_all_books
 from .. import session_store
 
 
@@ -20,6 +21,10 @@ def run(message: str, session_id: str | None):
         session_id = uuid.uuid4().hex          # 首次对话，生成新会话 ID
 
     history = session_store.get_history(session_id)   # 取上下文
-    reply = llm_chat(chat_messages(history, message))
+    try:
+        books = get_all_books()   # 注入在售书单，约束对话只引用库内图书
+    except Exception:  # noqa: BLE001 书单获取失败不阻塞对话
+        books = None
+    reply = llm_chat(chat_messages(history, message, books))
     session_store.append(session_id, message, reply)  # 追加本轮，刷新过期时间
     return reply, session_id

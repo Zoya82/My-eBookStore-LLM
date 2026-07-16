@@ -43,13 +43,22 @@ def recommend_prompt(query: str, books: list) -> list:
 _CHAT_SYSTEM = (
     "你是\"智能掌上书店\"的图书客服助手，友好、专业地解答图书、购买、阅读相关的问题。\n"
     "要求：回答简洁，一般不超过 3 句；聚焦图书与书店，无关问题礼貌引导回书店话题；"
-    "不确定或超出了解范围时如实说明，不编造；可适度用表情，但不堆砌。"
+    "不确定或超出了解范围时如实说明，不编造；可适度用表情，但不堆砌。\n"
+    "涉及推荐或介绍在售图书时，只能引用下方\"本店在售图书\"清单中的书，"
+    "不得推荐清单之外的书；清单中没有合适的就如实说明并引导用户描述需求。"
 )
 
 
-def chat_messages(history: list, user_message: str) -> list:
-    """history: [{"role": "user"/"assistant", "content": "..."}]"""
-    msgs = [{"role": "system", "content": _CHAT_SYSTEM}]
+def chat_messages(history: list, user_message: str, books: list | None = None) -> list:
+    """history: [{"role": "user"/"assistant", "content": "..."}]；books 为在售图书清单。"""
+    system = _CHAT_SYSTEM
+    if books:
+        book_lines = "\n".join(
+            f'- 《{b["title"]}》（{b.get("author", "")}，{b.get("category", "")}）'
+            for b in books
+        )
+        system += f"\n\n本店在售图书：\n{book_lines}"
+    msgs = [{"role": "system", "content": system}]
     msgs.extend(history)
     msgs.append({"role": "user", "content": user_message})
     return msgs
