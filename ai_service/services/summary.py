@@ -38,3 +38,37 @@ def run_book(book_id: int):
         logger.info("book_id=%s 无全文，降级简介摘要", book_id)
         return run(intro, 60), "intro"
     raise ValueError("该图书暂无可用于摘要的内容")
+
+
+def warm_all():
+    """预热：为所有有全文的书提前生成摘要进缓存，用户点击即秒回。
+
+    服务启动时在后台线程调用；无全文的书快速跳过（不为简介降级路径浪费 LLM 调用）。
+    """
+    from ..book_repo import get_all_books
+
+    try:
+        books = get_all_books()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("预热获取书单失败，跳过: %s", e)
+        return
+
+    done = skipped = failed = 0
+    for b in books:
+        book_id = b.get("id")
+        try:
+            material, mode = rag.get_summary_material(book_id)
+            if mode == "cached_summary":
+                done += 1
+                continue
+            if not material:                             # 无全文，跳过
+                skipped += 1
+                continue
+            s = chat(book_summary_prompt(b.get("title", ""), b.get("author", ""), material), temperature=0.7)
+            rag.cache_summary(book_id, s)
+            done += 1
+            logger.info("预热完成《%s》(id=%s, %s)", b.get("title"), book_id, mode)
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            logger.warning("预热失败(id=%s): %s", book_id, e)
+    logger.info("摘要预热结束：完成 %d，无全文跳过 %d，失败 %d", done, skipped, failed)
