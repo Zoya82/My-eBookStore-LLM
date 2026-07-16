@@ -49,12 +49,16 @@ def chat(messages: list, temperature: float = 0.7, max_retries: int = 2) -> str:
         raise LLMError("未配置 DASHSCOPE_API_KEY，请在 ai_service/.env 中填写")
 
     last_err = None
+    # qwen3 系列默认开启深度思考，摘要/推荐等场景延迟高达 20s+；
+    # 关闭思考后 1~2s 返回且质量不降（仅 qwen 系模型支持该参数）
+    extra = {"enable_thinking": False} if settings.model.startswith("qwen") else None
     for attempt in range(max_retries + 1):
         try:
             resp = _get_client().chat.completions.create(
                 model=settings.model,
                 messages=messages,
                 temperature=temperature,
+                extra_body=extra,
             )
             return resp.choices[0].message.content.strip()
         except Exception as e:  # noqa: BLE001 收敛所有异常

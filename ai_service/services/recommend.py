@@ -23,16 +23,19 @@ def _parse(raw: str, books: list) -> list:
     try:
         match = re.search(r"\[.*\]", raw, re.S)
         data = json.loads(match.group(0) if match else raw)
-        valid_ids = {b["id"] for b in books}
+        by_id = {b["id"]: b for b in books}
         items = []
         for it in data:
             bid = it.get("id")
             # 只保留库内存在的书，防止模型编造
-            if bid is not None and bid not in valid_ids:
+            if bid is not None and bid not in by_id:
                 continue
+            book = by_id.get(bid, {})
             items.append({
                 "id": bid,
-                "title": it.get("title", ""),
+                # 书名/作者以库内数据为准，不依赖模型输出
+                "title": book.get("title") or it.get("title", ""),
+                "author": book.get("author", ""),
                 "reason": it.get("reason", ""),
             })
         return items

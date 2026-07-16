@@ -27,6 +27,7 @@ class RecommendRequest(BaseModel):
 class RecommendItem(BaseModel):
     id: Optional[int] = None
     title: str = ""
+    author: str = ""
     reason: str = ""
 
 
