@@ -9,13 +9,15 @@ from pydantic import BaseModel, Field
 
 # ---------- 摘要 ----------
 class SummaryRequest(BaseModel):
-    text: str = Field(..., description="要摘要的图书简介")
-    max_length: int = Field(60, description="摘要最大字数")
+    text: Optional[str] = Field(None, description="要摘要的图书简介（传 text 走简介一句话摘要）")
+    book_id: Optional[int] = Field(None, description="图书 ID（传 book_id 走全文 RAG 安利体摘要，约 200 字）")
+    max_length: int = Field(60, description="简介摘要的最大字数（仅 text 模式生效）")
 
 
 class SummaryResponse(BaseModel):
     success: bool
     summary: str = ""
+    source: str = ""     # rag / full / cached / intro / text
     message: str = ""
 
 

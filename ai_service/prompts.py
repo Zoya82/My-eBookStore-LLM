@@ -16,6 +16,26 @@ def summary_prompt(text: str, max_length: int = 60) -> list:
     ]
 
 
+# ---------- 全文安利体摘要 ----------
+_BOOK_SUMMARY_SYSTEM = "你是资深图书编辑，擅长写让读者心动的图书推荐语。"
+
+
+def book_summary_prompt(title: str, author: str, material: str) -> list:
+    return [
+        {"role": "system", "content": _BOOK_SUMMARY_SYSTEM},
+        {"role": "user", "content": (
+            f"根据下面《{title}》（{author}）的内容节选，写一段约 200 字的图书推荐语。\n"
+            "要求：\n"
+            "1. 安利体三段式（合为一段自然衔接）：开头一句话勾住读者（一个引人的问题、场景或冲突），"
+            "中间讲清这本书最打动人的看点（写什么、妙在哪），结尾点明它适合谁、适合什么时候读；\n"
+            "2. 只依据下面的内容节选，不编造情节，不剧透关键结局；\n"
+            "3. 180~220 字，单段成文，不用标题、列表、引号、表情符号；\n"
+            "4. 语气真诚有感染力，不用\"本书\"\"该书\"等生硬指代，不用\"必读神作\"式广告腔。\n\n"
+            f"内容节选：\n{material}"
+        )},
+    ]
+
+
 # ---------- 智能推荐 ----------
 _RECOMMEND_SYSTEM = "你是专业的图书推荐助手，只能从给定的图书列表中推荐，绝不编造列表之外的书。"
 

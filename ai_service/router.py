@@ -35,7 +35,14 @@ _FALLBACK = "智能服务暂时不可用，请稍后重试。"
 @router.post("/summary", response_model=SummaryResponse)
 def summary(req: SummaryRequest):
     try:
-        return SummaryResponse(success=True, summary=summary_svc.run(req.text, req.max_length))
+        if req.book_id is not None:                      # 全文 RAG 安利体摘要
+            s, source = summary_svc.run_book(req.book_id)
+            return SummaryResponse(success=True, summary=s, source=source)
+        if req.text:                                     # 简介一句话摘要
+            return SummaryResponse(success=True, summary=summary_svc.run(req.text, req.max_length), source="text")
+        return SummaryResponse(success=False, message="请提供 book_id 或 text")
+    except ValueError as e:
+        return SummaryResponse(success=False, message=str(e))
     except LLMError as e:
         logger.error("摘要失败: %s", e)
         return SummaryResponse(success=False, message=_FALLBACK)
