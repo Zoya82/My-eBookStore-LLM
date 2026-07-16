@@ -75,8 +75,10 @@ _CHAT_SYSTEM = (
 )
 
 
-def chat_messages(history: list, user_message: str, books: list | None = None) -> list:
-    """history: [{"role": "user"/"assistant", "content": "..."}]；books 为在售图书清单。"""
+def chat_messages(history: list, user_message: str, books: list | None = None,
+                  book_details: list | None = None) -> list:
+    """history: [{"role": "user"/"assistant", "content": "..."}]；books 为在售图书清单；
+    book_details 为本轮对话涉及图书的资料（目录/简介），按需注入。"""
     system = _CHAT_SYSTEM
     if books:
         book_lines = "\n".join(
@@ -84,6 +86,20 @@ def chat_messages(history: list, user_message: str, books: list | None = None) -
             for b in books
         )
         system += f"\n\n本店在售图书：\n{book_lines}"
+    if book_details:
+        detail_lines = []
+        for d in book_details:
+            entry = f'《{d["title"]}》（{d.get("author", "")}）'
+            if d.get("catalog"):
+                entry += f'\n目录：\n{d["catalog"]}'
+            if d.get("intro"):
+                entry += f'\n简介：{d["intro"]}'
+            detail_lines.append(entry)
+        system += (
+            "\n\n相关图书资料（用户询问目录、简介等信息时依据此回答，可完整展示目录；"
+            "资料里没有的信息如实说明；书籍正文内容仍不可提供）：\n"
+            + "\n\n".join(detail_lines)
+        )
     msgs = [{"role": "system", "content": system}]
     msgs.extend(history)
     msgs.append({"role": "user", "content": user_message})

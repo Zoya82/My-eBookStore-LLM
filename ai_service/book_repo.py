@@ -63,3 +63,23 @@ def get_all_books() -> list:
 
 def get_book(book_id: int):
     return next((b for b in get_all_books() if b["id"] == book_id), None)
+
+
+@cached(TTLCache(maxsize=64, ttl=300))
+def get_book_detail(book_id: int):
+    """取单本书详情（目录、简介等列表接口没有的字段）；失败返回 None。"""
+    try:
+        resp = httpx.get(f"{BACKEND_API_BASE}/books/{book_id}/", timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        b = data.get("data") or data
+        return {
+            "id": b["id"],
+            "title": b.get("title", ""),
+            "author": b.get("author", ""),
+            "intro": b.get("description", ""),
+            "catalog": b.get("catalog", ""),
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.warning("获取图书详情失败(book_id=%s): %s", book_id, e)
+        return None
