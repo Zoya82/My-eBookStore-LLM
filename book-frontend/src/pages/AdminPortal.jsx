@@ -4,6 +4,7 @@ import { getAdminUserDetail, getAdminUsers, toggleAdminUser } from '../api/admin
 import { createAdminBook, getAdminBookDetail, getAdminBooks, getAdminCategories, setAdminBookSale, updateAdminBook } from '../api/admin'
 import { getAdminDashboardSummary } from '../api/admin'
 import { useAuth } from '../auth/AuthContext'
+import CategoryManagement from './CategoryManagement'
 
 const statusOptions = [['', '全部'], [1, '待付款'], [2, '待发货'], [3, '已发货'], [4, '已完成'], [5, '已取消']]
 const hasPhysical = order => order.items.some(item => item.versionType === 'physical')
@@ -77,6 +78,7 @@ export default function AdminPortal() {
   const [notice, setNotice] = useState('')
   const [section, setSection] = useState('dashboard')
   const [bookDirty, setBookDirty] = useState(false)
+  const [categoryDirty, setCategoryDirty] = useState(false)
   const isAdmin = Boolean(auth.user?.is_staff || auth.user?.is_superuser)
 
   const reload = useCallback(async nextFilters => {
@@ -105,9 +107,9 @@ export default function AdminPortal() {
   }
   const query = event => { event.preventDefault(); reload(filters) }
   const reset = () => { const next = { status: '', orderNo: '', receiver: '' }; setFilters(next); reload(next) }
-  const changeSection = next => { if (section === 'books' && bookDirty && !window.confirm('存在未保存的图书内容，确认放弃吗？')) return; setSection(next); setDetail(null); setShipping(null) }
+  const changeSection = next => { if ((section === 'books' && bookDirty) || (section === 'categories' && categoryDirty)) { if (!window.confirm('存在未保存的管理内容，确认放弃吗？')) return } setSection(next); setDetail(null); setShipping(null) }
   const dashboardGo = (next, id) => { changeSection(next); if (id && next === 'orders') openDetail(id) }
-  const logout = () => { if (section === 'books' && bookDirty && !window.confirm('存在未保存的图书内容，确认放弃并退出吗？')) return; setSection('dashboard'); setBookDirty(false); auth.logout() }
+  const logout = () => { if (((section === 'books' && bookDirty) || (section === 'categories' && categoryDirty)) && !window.confirm('存在未保存的管理内容，确认放弃并退出吗？')) return; setSection('dashboard'); setBookDirty(false); setCategoryDirty(false); auth.logout() }
   const openDetail = async id => {
     setDetail(null); setDetailLoading(true); setError('')
     try { setDetail(await getAdminOrderDetail(id)) }
@@ -135,9 +137,9 @@ export default function AdminPortal() {
   const canShip = detail && detail.status === 2 && hasPhysical(detail)
   return <div className="admin-portal">
     <header className="admin-header"><div><strong>书店管理台</strong><span>{auth.user.username} · {auth.user.is_superuser ? '超级管理员' : '管理员'}</span></div><div><a href="/">返回书店</a><button onClick={logout}>退出管理账号</button></div></header>
-    <div className="admin-layout"><aside className="admin-sidebar"><button className={section === 'dashboard' ? 'active' : ''} onClick={() => changeSection('dashboard')}>经营概览</button><button className={section === 'orders' ? 'active' : ''} onClick={() => changeSection('orders')}>订单管理</button><button className={section === 'users' ? 'active' : ''} onClick={() => changeSection('users')}>用户管理</button><button className={section === 'books' ? 'active' : ''} onClick={() => changeSection('books')}>图书管理</button></aside><main className="admin-content">
+    <div className="admin-layout"><aside className="admin-sidebar"><button className={section === 'dashboard' ? 'active' : ''} onClick={() => changeSection('dashboard')}>经营概览</button><button className={section === 'orders' ? 'active' : ''} onClick={() => changeSection('orders')}>订单管理</button><button className={section === 'users' ? 'active' : ''} onClick={() => changeSection('users')}>用户管理</button><button className={section === 'books' ? 'active' : ''} onClick={() => changeSection('books')}>图书管理</button><button className={section === 'categories' ? 'active' : ''} onClick={() => changeSection('categories')}>图书分类管理</button></aside><main className="admin-content">
       {notice && <div className="admin-notice">{notice}</div>}
-      {section === 'dashboard' ? <Dashboard go={dashboardGo} /> : section === 'users' ? <UserManagement auth={auth} setNotice={setNotice} /> : section === 'books' ? <BookManagement setNotice={setNotice} onDirtyChange={setBookDirty} /> : <>
+      {section === 'dashboard' ? <Dashboard go={dashboardGo} /> : section === 'users' ? <UserManagement auth={auth} setNotice={setNotice} /> : section === 'books' ? <BookManagement setNotice={setNotice} onDirtyChange={setBookDirty} /> : section === 'categories' ? <CategoryManagement setNotice={setNotice} onDirtyChange={setCategoryDirty} /> : <>
       {error && <div className="admin-error">{error}<button onClick={() => reload(filters)}>重新加载</button></div>}
       {detailLoading ? <div className="admin-panel">订单详情加载中……<button onClick={() => setDetail(null)}>返回订单列表</button></div> : detail ? <section className="admin-detail admin-panel">
         <button onClick={() => { setDetail(null); setShipping(null) }}>返回订单列表</button><h2>订单 {detail.orderNo}</h2>
