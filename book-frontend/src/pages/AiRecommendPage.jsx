@@ -5,7 +5,7 @@ const quickPrompts = {
   recommend: '帮我推荐几本适合晚上阅读的暖心小说',
 }
 
-function AiRecommendPage() {
+function AiRecommendPage({ onSelectBook }) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -128,7 +128,7 @@ function AiRecommendPage() {
               {result.items && result.items.length > 0 ? (
                 <div className="rec-items">
                   {result.items.map((item, idx) => (
-                    <div className="rec-item" key={idx}>
+                    <div className="rec-item" key={item.id ?? idx}>
                       <div className="rec-item-header">
                         <div>
                           <div className="rec-title">{item.title}</div>
@@ -137,7 +137,8 @@ function AiRecommendPage() {
                         <button
                           type="button"
                           className="detail-link"
-                          onClick={() => window.alert(`查看 ${item.title} 详情。`)}
+                          disabled={item.id === undefined || item.id === null}
+                          onClick={() => onSelectBook?.(item)}
                         >
                           查看详情
                         </button>
@@ -193,4 +194,3 @@ function AiRecommendPage() {
 }
 
 export default AiRecommendPage
-

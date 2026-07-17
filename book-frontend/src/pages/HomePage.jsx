@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import heroImg from '../assets/hero.png'
 import TopBar from '../components/TopBar'
 import BookCard from '../components/BookCard'
@@ -47,7 +47,7 @@ function HomePage() {
   const banners=[...home.newBooks,...home.hotBooks].filter((x,i,a)=>x&&a.findIndex(y=>y.id===x.id)===i).slice(0,5)
   useEffect(()=>{if(banners.length<2||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;const t=setInterval(()=>setBannerIndex(x=>(x+1)%banners.length),5000);return()=>clearInterval(t)},[banners.length])
 
-  const goMine = () => setActive('我的')
+  const goMine = useCallback(() => setActive('我的'), [])
   const openBook = (nextBook, returnPage = active) => {
     setBook(nextBook)
     setBookReturnPage(returnPage)
@@ -105,7 +105,7 @@ function HomePage() {
   } else if (active === '搜索') {
     content = <SearchPage onBack={() => setActive('首页')} onSelectBook={item => openBook(item, '搜索')} />
   } else if (active === '大模型对话') {
-    content = <AiRecommendPage />
+    content = <AiRecommendPage onSelectBook={item => openBook(item, tabs[2])} />
   } else {
     content = (
       <>
@@ -119,7 +119,8 @@ function HomePage() {
 
   const mySubPage = ['收藏', '评价', '历史', '订单', '订单详情', '书架', '收货地址'].includes(active) || (active === '阅读器' && reader.returnPage === '书架')
   const detailFromMy = active === '详情' && ['收藏', '评价', '历史'].includes(bookReturnPage)
-  const navActive = tabs.includes(active) ? active : mySubPage || detailFromMy ? '我的' : '首页'
+  const detailFromAi = active === '详情' && bookReturnPage === tabs[2]
+  const navActive = tabs.includes(active) ? active : detailFromAi ? tabs[2] : mySubPage || detailFromMy ? '我的' : '首页'
   const title = active === '首页' || active === '详情' ? '智能掌上书店' : active
 
   return <div className="app-root"><div className="device"><TopBar title={title} showSearch={active === '首页'} onSearchClick={() => setActive('搜索')} /><main className="main">{content}</main><BottomNav activeTab={navActive} onTabChange={setActive} /></div></div>

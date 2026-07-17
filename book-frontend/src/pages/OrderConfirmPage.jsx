@@ -39,11 +39,12 @@ function OrderConfirmPage({ cartItemIds, onBack, onCreated, onRequireLogin }) {
   const [addresses, setAddresses] = useState([])
   const [addressError, setAddressError] = useState('')
   const [saveToAddressBook, setSaveToAddressBook] = useState(true)
+  const [selectedAddressId, setSelectedAddressId] = useState(undefined)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) onRequireLogin?.()
     if (isAuthenticated) {
-      getAddresses().then(list => { setAddresses(list); const selected = list.find(item => item.is_default) || list[0]; if (selected) setForm(current => ({ ...current, ...cleanAddress(selected) })) }).catch(e => setAddressError(e.message))
+      getAddresses().then(list => { setAddresses(list); const selected = list.find(item => item.is_default) || list[0]; if (selected) { setSelectedAddressId(selected.id); setForm(current => ({ ...current, ...cleanAddress(selected) })) } else setSelectedAddressId(null) }).catch(e => setAddressError(e.message))
       getCart()
         .then(cart => {
           const found = cart.items.filter(item => cartItemIds.includes(item.id) && item.isValid && item.selected)
@@ -85,6 +86,19 @@ function OrderConfirmPage({ cartItemIds, onBack, onCreated, onRequireLogin }) {
 
   const total = items.reduce((sum, item) => sum + (item.subtotal || 0), 0)
   const isSavedAddress = addresses.some(address => isSameAddress(address, form))
+  const chooseSavedAddress = address => {
+    setSelectedAddressId(address.id)
+    setForm(current => ({ ...current, ...cleanAddress(address) }))
+  }
+  const chooseNewAddress = () => {
+    setSelectedAddressId(null)
+    setSaveToAddressBook(true)
+    setForm(current => ({ ...current, receiver: '', phone: '', province: '', city: '', district: '', detail: '' }))
+  }
+  const updateShippingField = (field, value) => {
+    setSelectedAddressId(null)
+    setForm(current => ({ ...current, [field]: value }))
+  }
 
   return (
     <div className="order-page order-confirm-page">
@@ -125,23 +139,23 @@ function OrderConfirmPage({ cartItemIds, onBack, onCreated, onRequireLogin }) {
         </section>
 
         <section className="order-panel order-form-panel">
-          <div className="address-select-area"><h3>选择收货地址</h3>{addressError&&<div className="error-msg">{addressError}</div>}{addresses.map(address => <button type="button" className={`address-option${isSameAddress(address, form) ? ' selected' : ''}`} key={address.id} onClick={() => setForm(current => ({ ...current, ...cleanAddress(address) }))}><strong>{address.receiver} {address.phone}</strong><span>{address.province} {address.city} {address.district} {address.detail}</span>{address.is_default&&<em>默认地址</em>}</button>)}</div>
+          <div className="address-select-area"><h3>选择收货地址</h3>{addressError&&<div className="error-msg">{addressError}</div>}{addresses.map(address => <button type="button" className={`address-option${selectedAddressId === address.id ? ' selected' : ''}`} key={address.id} onClick={() => chooseSavedAddress(address)}><strong>{address.receiver} {address.phone}</strong><span>{address.province} {address.city} {address.district} {address.detail}</span>{address.is_default&&<em>默认地址</em>}</button>)}<button type="button" className={`address-option${selectedAddressId === null ? ' selected' : ''}`} onClick={chooseNewAddress}><strong>＋ 使用新地址</strong><span>填写并保存一个新的收货地址</span></button></div>
           <div className="order-panel-title">
             <h3>收货信息</h3>
             <span>请确认填写无误</span>
           </div>
           <form className="order-form" onSubmit={submit} noValidate>
             <div className="order-form-row">
-              <label>收货人<input value={form.receiver} onChange={event => setForm({ ...form, receiver: event.target.value })} maxLength="50" required /></label>
-              <label>手机号<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} inputMode="numeric" maxLength="11" required /></label>
+              <label>收货人<input value={form.receiver} onChange={event => updateShippingField('receiver', event.target.value)} maxLength="50" required /></label>
+              <label>手机号<input value={form.phone} onChange={event => updateShippingField('phone', event.target.value)} inputMode="numeric" maxLength="11" required /></label>
             </div>
             <div className="order-form-row">
-              <label>省<input value={form.province} onChange={event => setForm({ ...form, province: event.target.value })} maxLength="50" required /></label>
-              <label>市<input value={form.city} onChange={event => setForm({ ...form, city: event.target.value })} maxLength="50" required /></label>
+              <label>省<input value={form.province} onChange={event => updateShippingField('province', event.target.value)} maxLength="50" required /></label>
+              <label>市<input value={form.city} onChange={event => updateShippingField('city', event.target.value)} maxLength="50" required /></label>
             </div>
             <div className="order-form-row">
-              <label>区 / 县<input value={form.district} onChange={event => setForm({ ...form, district: event.target.value })} maxLength="50" required /></label>
-              <label>详细地址<input value={form.detail} onChange={event => setForm({ ...form, detail: event.target.value })} maxLength="200" required /></label>
+              <label>区 / 县<input value={form.district} onChange={event => updateShippingField('district', event.target.value)} maxLength="50" required /></label>
+              <label>详细地址<input value={form.detail} onChange={event => updateShippingField('detail', event.target.value)} maxLength="200" required /></label>
             </div>
             {isSavedAddress
               ? <div className="success-msg">该地址已在您的地址库中</div>
