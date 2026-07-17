@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import heroImg from '../assets/hero.png'
 import TopBar from '../components/TopBar'
 import BookCard from '../components/BookCard'
@@ -47,7 +47,7 @@ function HomePage() {
   const banners=[...home.newBooks,...home.hotBooks].filter((x,i,a)=>x&&a.findIndex(y=>y.id===x.id)===i).slice(0,5)
   useEffect(()=>{if(banners.length<2||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;const t=setInterval(()=>setBannerIndex(x=>(x+1)%banners.length),5000);return()=>clearInterval(t)},[banners.length])
 
-  const goMine = () => setActive('我的')
+  const goMine = useCallback(() => setActive('我的'), [])
   const openBook = (nextBook, returnPage = active) => {
     setBook(nextBook)
     setBookReturnPage(returnPage)
