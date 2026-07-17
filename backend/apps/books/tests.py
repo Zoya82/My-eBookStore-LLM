@@ -109,6 +109,20 @@ class BookApiTests(TestCase):
         self.assertTrue(any(item['title'] == 'recent-home' for item in new_books))
         self.assertTrue(any(item['title'] == 'older-home' for item in new_books))
 
+    def test_public_categories_only_returns_active_categories_with_books(self):
+        self.category.description = '公开分类说明'; self.category.save(update_fields=['description'])
+        self.create_book(title='active-category-book', isbn='isbn-active-category')
+        inactive = Category.objects.create(name='停用分类', description='不应公开', is_active=False)
+        self.create_book(title='inactive-category-book', isbn='isbn-inactive-category', category=inactive)
+        Category.objects.create(name='空分类')
+
+        response = self.client.get('/api/books/categories/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()['data']
+        self.assertEqual([item['name'] for item in data], ['测试分类'])
+        self.assertEqual(data[0]['description'], '公开分类说明')
+        self.assertEqual(data[0]['book_count'], 1)
+
     def test_is_new_filter_uses_last_7_days(self):
         recent = self.create_book(title='recent', isbn='isbn-recent-filter', on_shelf_date=(timezone.now().date() - timedelta(days=2)))
         old = self.create_book(title='old', isbn='isbn-old-filter', on_shelf_date=(timezone.now().date() - timedelta(days=10)))

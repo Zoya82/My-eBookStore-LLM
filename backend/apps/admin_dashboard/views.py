@@ -13,7 +13,7 @@ from apps.users.models import User
 from apps.users.serializers import UserSerializer
 from apps.books.models import Book, BookVersion, Category
 from .permissions import IsStaffOrSuperuser
-from .serializers import AdminOrderActionSerializer, AdminOrderListSerializer, AdminUserToggleSerializer, AdminBookReadSerializer, AdminBookWriteSerializer, AdminBookSaleSerializer, AdminCategorySerializer, AdminRecentOrderSerializer
+from .serializers import AdminOrderActionSerializer, AdminOrderListSerializer, AdminUserToggleSerializer, AdminBookReadSerializer, AdminBookWriteSerializer, AdminBookSaleSerializer, AdminCategorySerializer, AdminCategoryBooksSerializer, AdminRecentOrderSerializer
 
 
 def validation_response(errors, msg='提交信息有误'):
@@ -97,7 +97,86 @@ class AdminUserToggleView(AdminBaseView):
 
 class AdminCategoryListView(AdminBaseView):
     def get(self, request):
-        return Response({'code': 200, 'msg': 'success', 'data': AdminCategorySerializer(Category.objects.select_related('parent').all().order_by('sort', 'id'), many=True).data})
+        queryset = Category.objects.select_related('parent').annotate(book_count=Count('books', distinct=True), child_count=Count('children', distinct=True)).order_by('sort', 'id')
+        return Response({'code': 200, 'msg': 'success', 'data': AdminCategorySerializer(queryset, many=True).data})
+
+    def post(self, request):
+        serializer = AdminCategorySerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_response(serializer.errors)
+        category = serializer.save()
+        return Response({'code': 201, 'msg': '分类创建成功', 'data': AdminCategorySerializer(category).data}, status=status.HTTP_201_CREATED)
+
+
+class AdminCategoryDetailView(AdminBaseView):
+    def get_category(self, category_id):
+        return get_object_or_404(Category.objects.select_related('parent').annotate(book_count=Count('books', distinct=True), child_count=Count('children', distinct=True)), id=category_id)
+
+    def get(self, request, category_id):
+        return Response({'code': 200, 'msg': 'success', 'data': AdminCategorySerializer(self.get_category(category_id)).data})
+
+    def put(self, request, category_id):
+        category = self.get_category(category_id)
+        serializer = AdminCategorySerializer(category, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return validation_response(serializer.errors)
+        category = serializer.save()
+        return Response({'code': 200, 'msg': '分类更新成功', 'data': AdminCategorySerializer(category).data})
+
+    def delete(self, request, category_id):
+        category = self.get_category(category_id)
+        if category.child_count:
+            return validation_response({'category': ['请先移动或删除该分类下的子分类']})
+        book_count = category.book_count
+        category_name = category.name
+        category.delete()
+        return Response({'code': 200, 'msg': '分类已删除，原分类图书已设为未分类', 'data': {'category_id': category_id, 'category_name': category_name, 'affected_books': book_count}})
+
+
+class AdminCategoryBooksView(AdminBaseView):
+    def get_category(self, category_id):
+        return get_object_or_404(Category, id=category_id)
+
+    def get(self, request, category_id):
+        category = self.get_category(category_id)
+        keyword = request.query_params.get('keyword', '').strip()
+        try:
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+        except (TypeError, ValueError):
+            return validation_response({'page': ['参数格式不正确']})
+        if page < 1:
+            return validation_response({'page': ['page 必须大于等于 1']})
+        if not 1 <= page_size <= 100:
+            return validation_response({'page_size': ['page_size 必须在 1 到 100 之间']})
+        queryset = Book.objects.select_related('category').prefetch_related('versions').filter(category=category).order_by('-id')
+        if keyword:
+            queryset = queryset.filter(Q(title__icontains=keyword) | Q(author__icontains=keyword) | Q(isbn__icontains=keyword))
+        total = queryset.count()
+        items = queryset[(page - 1) * page_size: page * page_size]
+        return Response({'code': 200, 'msg': 'success', 'data': {'total': total, 'page': page, 'page_size': page_size, 'items': AdminBookReadSerializer(items, many=True).data}})
+
+    def put(self, request, category_id):
+        category = self.get_category(category_id)
+        serializer = AdminCategoryBooksSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_response(serializer.errors)
+        book_ids = serializer.validated_data['book_ids']
+        existing_ids = set(Book.objects.filter(id__in=book_ids).values_list('id', flat=True))
+        missing_ids = sorted(set(book_ids) - existing_ids)
+        if missing_ids:
+            return validation_response({'book_ids': [f'图书不存在：{", ".join(map(str, missing_ids))}']})
+        action = serializer.validated_data['action']
+        with transaction.atomic():
+            books = Book.objects.select_for_update().filter(id__in=book_ids)
+            if action == 'add':
+                changed = books.exclude(category=category).update(category=category)
+                msg = '图书已加入分类'
+            else:
+                changed = books.filter(category=category).update(category=None)
+                msg = '图书已移出分类'
+        detail = Category.objects.select_related('parent').annotate(book_count=Count('books', distinct=True), child_count=Count('children', distinct=True)).get(pk=category.pk)
+        return Response({'code': 200, 'msg': msg, 'data': {'changed': changed, 'category': AdminCategorySerializer(detail).data}})
 
 
 class AdminBookListCreateView(AdminBaseView):

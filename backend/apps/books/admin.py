@@ -6,8 +6,9 @@ from .models import Book, Category, BookVersion
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'parent', 'sort']
-    search_fields = ['name']
+    list_display = ['id', 'name', 'parent', 'sort', 'is_active']
+    list_filter = ['is_active', 'parent']
+    search_fields = ['name', 'description']
 
 
 class BookVersionInline(admin.TabularInline):

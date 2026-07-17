@@ -82,7 +82,44 @@ class AdminDashboardTests(TestCase):
         self.assertEqual(self.client.get(self.books, {'page':0}).status_code, 400)
         self.assertEqual(self.client.get(self.books, {'page_size':101}).status_code, 400)
         categories = self.client.get(self.categories); self.assertEqual(categories.status_code, 200); self.assertIn('parent_name', categories.data['data'][0])
+        self.assertEqual(categories.data['data'][0]['book_count'], 2); self.assertIn('description', categories.data['data'][0]); self.assertIn('is_active', categories.data['data'][0])
         self.client.force_authenticate(self.superuser); self.assertEqual(self.client.get(self.books).status_code, 200)
+
+    def test_admin_category_crud_hierarchy_and_delete_rules(self):
+        payload = {'name':' 文学 ', 'parent':None, 'sort':3, 'description':' 小说与散文 ', 'is_active':False}
+        self.assertEqual(self.client.post(self.categories, payload, format='json').status_code, 401)
+        self.client.force_authenticate(self.user); self.assertEqual(self.client.post(self.categories, payload, format='json').status_code, 403)
+        self.client.force_authenticate(self.staff)
+        created = self.client.post(self.categories, payload, format='json')
+        self.assertEqual(created.status_code, 201); category_id = created.data['data']['id']
+        self.assertEqual(created.data['data']['name'], '文学'); self.assertEqual(created.data['data']['description'], '小说与散文'); self.assertFalse(created.data['data']['is_active'])
+        self.assertEqual(self.client.post(self.categories, {**payload, 'name':'文学'}, format='json').status_code, 400)
+        self.assertEqual(self.client.post(self.categories, {**payload, 'name':'错误排序', 'sort':-1}, format='json').status_code, 400)
+        child = self.client.post(self.categories, {'name':'中国文学', 'parent':category_id}, format='json')
+        self.assertEqual(child.status_code, 201); child_id = child.data['data']['id']
+        updated = self.client.put(f'{self.categories}{child_id}/', {'name':'中国现当代文学', 'sort':8}, format='json')
+        self.assertEqual(updated.status_code, 200); self.assertEqual(updated.data['data']['parent'], category_id)
+        self.assertEqual(self.client.put(f'{self.categories}{category_id}/', {'parent':child_id}, format='json').status_code, 400)
+        self.assertEqual(self.client.delete(f'{self.categories}{category_id}/').status_code, 400)
+        self.on_book.category_id = child_id; self.on_book.save(update_fields=['category'])
+        deleted = self.client.delete(f'{self.categories}{child_id}/')
+        self.assertEqual(deleted.status_code, 200); self.assertEqual(deleted.data['data']['affected_books'], 1)
+        self.on_book.refresh_from_db(); self.assertIsNone(self.on_book.category_id)
+        self.assertEqual(self.client.delete(f'{self.categories}{category_id}/').status_code, 200)
+
+    def test_admin_category_add_remove_books_and_validation(self):
+        target = Category.objects.create(name='目标分类')
+        endpoint = f'{self.categories}{target.id}/books/'
+        self.client.force_authenticate(self.staff)
+        added = self.client.put(endpoint, {'action':'add', 'book_ids':[self.off_book.id, self.on_book.id]}, format='json')
+        self.assertEqual(added.status_code, 200); self.assertEqual(added.data['data']['changed'], 2); self.assertEqual(added.data['data']['category']['book_count'], 2)
+        listed = self.client.get(endpoint, {'keyword':'作者甲'})
+        self.assertEqual(listed.status_code, 200); self.assertEqual(listed.data['data']['total'], 1); self.assertEqual(listed.data['data']['items'][0]['id'], self.off_book.id)
+        removed = self.client.put(endpoint, {'action':'remove', 'book_ids':[self.off_book.id]}, format='json')
+        self.assertEqual(removed.status_code, 200); self.assertEqual(removed.data['data']['changed'], 1)
+        self.off_book.refresh_from_db(); self.assertIsNone(self.off_book.category_id)
+        self.assertEqual(self.client.put(endpoint, {'action':'add', 'book_ids':[999999]}, format='json').status_code, 400)
+        self.assertEqual(self.client.put(endpoint, {'action':'add', 'book_ids':[self.on_book.id, self.on_book.id]}, format='json').status_code, 400)
 
     def test_admin_book_create_update_sale_and_validation(self):
         self.client.force_authenticate(self.staff)

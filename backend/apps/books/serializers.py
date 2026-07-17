@@ -8,14 +8,14 @@ from .models import Book, Category, BookVersion
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['id', 'name', 'parent']
+        fields = ['id', 'name', 'parent', 'description']
 
 class PublicCategorySerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source='parent.name', read_only=True, allow_null=True)
     book_count = serializers.IntegerField(read_only=True)
     class Meta:
         model = Category
-        fields = ['id', 'name', 'parent', 'parent_name', 'book_count']
+        fields = ['id', 'name', 'parent', 'parent_name', 'description', 'book_count']
 
 
 class BookVersionSerializer(serializers.ModelSerializer):

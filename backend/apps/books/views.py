@@ -178,7 +178,7 @@ class BookViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='categories')
     def categories(self, request):
-        queryset = Category.objects.select_related('parent').annotate(book_count=Count('books', filter=Q(books__is_on_sale=True), distinct=True)).filter(book_count__gt=0).order_by('sort', 'id')
+        queryset = Category.objects.select_related('parent').filter(is_active=True).annotate(book_count=Count('books', filter=Q(books__is_on_sale=True), distinct=True)).filter(book_count__gt=0).order_by('sort', 'id')
         return Response({'code': 200, 'msg': 'success', 'data': PublicCategorySerializer(queryset, many=True).data})
 
     @action(detail=True, methods=['get'], url_path='preview', permission_classes=[IsAuthenticated])

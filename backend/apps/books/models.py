@@ -7,6 +7,8 @@ class Category(models.Model):
     name = models.CharField(max_length=50, verbose_name='分类名称')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children', verbose_name='父级分类')
     sort = models.IntegerField(default=0, verbose_name='排序')
+    description = models.TextField(blank=True, default='', verbose_name='分类说明')
+    is_active = models.BooleanField(default=True, verbose_name='是否启用')
 
     class Meta:
         db_table = 'categories'

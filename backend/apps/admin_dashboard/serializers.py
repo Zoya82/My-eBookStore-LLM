@@ -45,9 +45,81 @@ class AdminUserToggleSerializer(serializers.Serializer):
 
 class AdminCategorySerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source='parent.name', read_only=True, allow_null=True)
+    book_count = serializers.SerializerMethodField()
+    child_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Category
-        fields = ['id', 'name', 'parent', 'parent_name', 'sort']
+        fields = ['id', 'name', 'parent', 'parent_name', 'sort', 'description', 'is_active', 'book_count', 'child_count']
+        extra_kwargs = {
+            'name': {'required': True, 'allow_blank': False},
+            'sort': {'required': False, 'min_value': 0},
+            'description': {'required': False, 'allow_blank': True},
+            'is_active': {'required': False},
+        }
+
+    def get_book_count(self, obj):
+        return obj.book_count if hasattr(obj, 'book_count') else obj.books.count()
+
+    def get_child_count(self, obj):
+        return obj.child_count if hasattr(obj, 'child_count') else obj.children.count()
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('分类名称不能为空')
+        return value
+
+    def validate_description(self, value):
+        value = value.strip()
+        if len(value) > 500:
+            raise serializers.ValidationError('分类说明不能超过 500 字')
+        return value
+
+    def validate(self, attrs):
+        allowed = {'name', 'parent', 'sort', 'description', 'is_active'}
+        extras = set(self.initial_data) - allowed
+        if extras:
+            raise serializers.ValidationError({field: ['不允许修改该字段'] for field in sorted(extras)})
+
+        name = attrs.get('name', self.instance.name if self.instance else '')
+        parent = attrs.get('parent', self.instance.parent if self.instance else None)
+        if self.instance and parent and parent.pk == self.instance.pk:
+            raise serializers.ValidationError({'parent': ['分类不能把自己设为父分类']})
+
+        ancestor = parent
+        while self.instance and ancestor:
+            if ancestor.pk == self.instance.pk:
+                raise serializers.ValidationError({'parent': ['父分类不能是当前分类的子分类']})
+            ancestor = ancestor.parent
+
+        duplicates = Category.objects.filter(name__iexact=name)
+        duplicates = duplicates.filter(parent=parent) if parent else duplicates.filter(parent__isnull=True)
+        if self.instance:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError({'name': ['同一父分类下已存在同名分类']})
+        return attrs
+
+
+class AdminCategoryBooksSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=['add', 'remove'])
+    book_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=100,
+    )
+
+    def validate_book_ids(self, value):
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError('图书 ID 不能重复')
+        return value
+
+    def validate(self, attrs):
+        extras = set(self.initial_data) - {'action', 'book_ids'}
+        if extras:
+            raise serializers.ValidationError({field: ['不允许修改该字段'] for field in sorted(extras)})
+        return attrs
 
 
 class AdminBookVersionSerializer(serializers.ModelSerializer):

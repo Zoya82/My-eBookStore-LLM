@@ -13,6 +13,8 @@ urlpatterns = [
     path('users/<int:user_id>/toggle/', views.AdminUserToggleView.as_view(), name='admin-user-toggle'),
 
     path('categories/', views.AdminCategoryListView.as_view(), name='admin-category-list'),
+    path('categories/<int:category_id>/', views.AdminCategoryDetailView.as_view(), name='admin-category-detail'),
+    path('categories/<int:category_id>/books/', views.AdminCategoryBooksView.as_view(), name='admin-category-books'),
     path('books/', views.AdminBookListCreateView.as_view(), name='admin-book-list-create'),
     path('books/<int:book_id>/', views.AdminBookDetailView.as_view(), name='admin-book-detail'),
     path('books/<int:book_id>/sale/', views.AdminBookSaleView.as_view(), name='admin-book-sale'),
